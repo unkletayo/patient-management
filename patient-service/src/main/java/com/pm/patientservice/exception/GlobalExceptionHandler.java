@@ -64,6 +64,12 @@ public class GlobalExceptionHandler {
     return respond(HttpStatus.BAD_REQUEST, ex.getMessage());
   }
 
+  @ExceptionHandler(InvalidDateRangeException.class)
+  public ResponseEntity<ApiResponse<Void>> handleInvalidDateRange(
+      InvalidDateRangeException ex) {
+    return respond(HttpStatus.BAD_REQUEST, ex.getMessage());
+  }
+
   @ExceptionHandler(PatientNotFoundException.class)
   public ResponseEntity<ApiResponse<Void>> handleNotFound(
       PatientNotFoundException ex) {

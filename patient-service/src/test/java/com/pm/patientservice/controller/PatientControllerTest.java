@@ -2,7 +2,10 @@ package com.pm.patientservice.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -59,14 +62,15 @@ class PatientControllerTest {
 
   private Pageable capturePageable() {
     ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
-    verify(patientService).getPatients(captor.capture());
+    verify(patientService).getPatients(any(), any(), any(), any(),
+        captor.capture());
     return captor.getValue();
   }
 
   @Test
   void listReturnsEnvelopeWithPage() throws Exception {
     UUID id = UUID.randomUUID();
-    when(patientService.getPatients(any())).thenReturn(page(dto(id)));
+    when(patientService.getPatients(any(), any(), any(), any(), any())).thenReturn(page(dto(id)));
 
     mockMvc.perform(get("/patients"))
         .andExpect(status().isOk())
@@ -88,8 +92,114 @@ class PatientControllerTest {
   }
 
   @Test
+  void listWithoutFiltersPassesNulls() throws Exception {
+    when(patientService.getPatients(any(), any(), any(), any(), any()))
+        .thenReturn(page());
+
+    mockMvc.perform(get("/patients")).andExpect(status().isOk());
+
+    verify(patientService).getPatients(isNull(), isNull(), isNull(), isNull(),
+        any(Pageable.class));
+  }
+
+  @Test
+  void listPassesNameFilter() throws Exception {
+    when(patientService.getPatients(any(), any(), any(), any(), any()))
+        .thenReturn(page());
+
+    mockMvc.perform(get("/patients").param("name", "jo"))
+        .andExpect(status().isOk());
+
+    verify(patientService).getPatients(eq("jo"), isNull(), isNull(), isNull(),
+        any(Pageable.class));
+  }
+
+  @Test
+  void listPassesEmailFilter() throws Exception {
+    when(patientService.getPatients(any(), any(), any(), any(), any()))
+        .thenReturn(page());
+
+    mockMvc.perform(get("/patients").param("email", "@example.com"))
+        .andExpect(status().isOk());
+
+    verify(patientService).getPatients(isNull(), eq("@example.com"), isNull(),
+        isNull(), any(Pageable.class));
+  }
+
+  @Test
+  void listPassesRegisteredDateFilters() throws Exception {
+    when(patientService.getPatients(any(), any(), any(), any(), any()))
+        .thenReturn(page());
+
+    mockMvc.perform(get("/patients").param("registeredFrom", "2024-01-01")
+            .param("registeredTo", "2024-12-31"))
+        .andExpect(status().isOk());
+
+    verify(patientService).getPatients(isNull(), isNull(),
+        eq(LocalDate.of(2024, 1, 1)), eq(LocalDate.of(2024, 12, 31)),
+        any(Pageable.class));
+  }
+
+  @Test
+  void listPassesCombinedFiltersAndKeepsPaging() throws Exception {
+    when(patientService.getPatients(any(), any(), any(), any(), any()))
+        .thenReturn(page());
+
+    mockMvc.perform(get("/patients").param("name", "jo").param("email", "ex")
+            .param("registeredFrom", "2024-01-10")
+            .param("registeredTo", "2024-01-10")
+            .param("size", "5").param("sort", "email,desc"))
+        .andExpect(status().isOk());
+
+    ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+    verify(patientService).getPatients(eq("jo"), eq("ex"),
+        eq(LocalDate.of(2024, 1, 10)), eq(LocalDate.of(2024, 1, 10)),
+        captor.capture());
+    assertThat(captor.getValue().getPageSize()).isEqualTo(5);
+    assertThat(captor.getValue().getSort().getOrderFor("email")).isNotNull();
+  }
+
+  @Test
+  void listNoMatchReturnsEmptyPage() throws Exception {
+    when(patientService.getPatients(any(), any(), any(), any(), any()))
+        .thenReturn(page());
+
+    mockMvc.perform(get("/patients").param("name", "nobody"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.requestSuccessful").value(true))
+        .andExpect(jsonPath("$.responseBody.content").isEmpty())
+        .andExpect(jsonPath("$.responseBody.totalElements").value(0))
+        .andExpect(jsonPath("$.responseBody.empty").value(true));
+  }
+
+  @Test
+  void listUnparseableDateReturns400() throws Exception {
+    mockMvc.perform(get("/patients").param("registeredFrom", "15/06/2024"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.requestSuccessful").value(false))
+        .andExpect(jsonPath("$.responseCode").value("400"))
+        .andExpect(jsonPath("$.responseMessage")
+            .value("Invalid value for parameter 'registeredFrom'"));
+
+    verifyNoInteractions(patientService);
+  }
+
+  @Test
+  void listFromAfterToReturns400() throws Exception {
+    mockMvc.perform(get("/patients").param("registeredFrom", "2024-02-01")
+            .param("registeredTo", "2024-01-31"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.requestSuccessful").value(false))
+        .andExpect(jsonPath("$.responseCode").value("400"))
+        .andExpect(jsonPath("$.responseMessage")
+            .value("registeredFrom must not be after registeredTo"));
+
+    verifyNoInteractions(patientService);
+  }
+
+  @Test
   void listClampsPageSizeToMax() throws Exception {
-    when(patientService.getPatients(any())).thenReturn(page());
+    when(patientService.getPatients(any(), any(), any(), any(), any())).thenReturn(page());
 
     mockMvc.perform(get("/patients").param("size", "1000").param("page", "2"))
         .andExpect(status().isOk());
@@ -101,7 +211,7 @@ class PatientControllerTest {
 
   @Test
   void listAcceptsWhitelistedSort() throws Exception {
-    when(patientService.getPatients(any())).thenReturn(page());
+    when(patientService.getPatients(any(), any(), any(), any(), any())).thenReturn(page());
 
     mockMvc.perform(get("/patients").param("sort", "dateOfBirth,desc"))
         .andExpect(status().isOk());
@@ -270,7 +380,7 @@ class PatientControllerTest {
 
   @Test
   void unexpectedErrorReturnsGeneric500() throws Exception {
-    when(patientService.getPatients(any())).thenThrow(
+    when(patientService.getPatients(any(), any(), any(), any(), any())).thenThrow(
         new IllegalStateException("secret internals"));
 
     mockMvc.perform(get("/patients"))

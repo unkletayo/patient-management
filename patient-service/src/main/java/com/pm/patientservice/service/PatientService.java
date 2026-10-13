@@ -10,6 +10,8 @@ import com.pm.patientservice.kafka.KafkaProducer;
 import com.pm.patientservice.mapper.PatientMapper;
 import com.pm.patientservice.model.Patient;
 import com.pm.patientservice.repository.PatientRepository;
+import com.pm.patientservice.repository.PatientSpecifications;
+import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -31,9 +33,11 @@ public class PatientService {
   }
 
   @Transactional(readOnly = true)
-  public PageResponse<PatientResponseDTO> getPatients(Pageable pageable) {
-    return PageResponse.from(patientRepository.findAll(pageable),
-        PatientMapper::toDTO);
+  public PageResponse<PatientResponseDTO> getPatients(String name, String email,
+      LocalDate registeredFrom, LocalDate registeredTo, Pageable pageable) {
+    return PageResponse.from(patientRepository.findAll(
+        PatientSpecifications.withFilters(name, email, registeredFrom,
+            registeredTo), pageable), PatientMapper::toDTO);
   }
 
   @Transactional(readOnly = true)
