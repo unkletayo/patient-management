@@ -1,4 +1,5 @@
 package com.pm.patientservice.kafka;
+
 import com.pm.patientservice.model.Patient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,6 +12,8 @@ public class KafkaProducer {
 
   private static final Logger log = LoggerFactory.getLogger(
       KafkaProducer.class);
+  private static final String TOPIC = "patient";
+
   private final KafkaTemplate<String, byte[]> kafkaTemplate;
 
   public KafkaProducer(KafkaTemplate<String, byte[]> kafkaTemplate) {
@@ -26,9 +29,13 @@ public class KafkaProducer {
         .build();
 
     try {
-      kafkaTemplate.send("patient", event.toByteArray());
+      kafkaTemplate.send(TOPIC, event.toByteArray()).whenComplete((result, ex) -> {
+        if (ex != null) {
+          log.error("Failed to publish PatientCreated event: {}", event, ex);
+        }
+      });
     } catch (Exception e) {
-      log.error("Error sending PatientCreated event: {}", event);
+      log.error("Error sending PatientCreated event: {}", event, e);
     }
   }
 }
