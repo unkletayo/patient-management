@@ -1,37 +1,12 @@
-server:
-  port: 4004 # Gateway listens on port 4004
+# Routes are inherited from application.yml; only upstream defaults differ.
+auth:
+  service:
+    url: ${AUTH_SERVICE_URL:http://auth-service:4005}
 
-spring:
-  cloud:
-    gateway:
-      routes:
-        - id: auth-service-route
-          uri: http://host.docker.internal:4005
-          predicates:
-            - Path=/auth/**
-          filters:
-            - StripPrefix=1
+patient:
+  service:
+    url: ${PATIENT_SERVICE_URL:http://patient-service:4000}
 
-        # Route for /api/patients/** to patient-service
-        - id: patient-service-route
-          uri: http://host.docker.internal:4000
-          predicates:
-            - Path=/api/patients/**
-          filters:
-            - StripPrefix=1
-            - JwtValidation
-
-        # Route for /api/docs/patients to patient-service /v3/api-docs
-        - id: api-docs-patient-route
-          uri: http://host.docker.internal:4000
-          predicates:
-            - Path=/api-docs/patients
-          filters:
-            - RewritePath=/api-docs/patients,/v3/api-docs
-
-        - id: api-docs-auth-route
-          uri: http:/host.docker.internal:4005
-          predicates:
-            - Path=/api-docs/auth
-          filters:
-            - RewritePath=/api-docs/auth,/v3/api-docs
+billing:
+  service:
+    url: ${BILLING_SERVICE_URL:http://billing-service:4001}

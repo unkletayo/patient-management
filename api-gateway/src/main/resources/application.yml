@@ -1,37 +1,71 @@
 server:
   port: 4004 # Gateway listens on port 4004
 
+auth:
+  service:
+    url: ${AUTH_SERVICE_URL:http://host.docker.internal:4005}
+    timeout: 3s
+
+patient:
+  service:
+    url: ${PATIENT_SERVICE_URL:http://host.docker.internal:4000}
+
+billing:
+  service:
+    url: ${BILLING_SERVICE_URL:http://host.docker.internal:4001}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
 spring:
+  application:
+    name: api-gateway
   cloud:
     gateway:
-      routes:
-        - id: auth-service-route
-          uri: http://auth-service:4005
-          predicates:
-            - Path=/auth/**
-          filters:
-            - StripPrefix=1
+      server:
+        webflux:
+          httpclient:
+            connect-timeout: 2000
+            response-timeout: 30s
+          routes:
+            # /auth/login and /auth/validate are public at the gateway;
+            # the auth-service authenticates /validate itself.
+            - id: auth-service-route
+              uri: ${auth.service.url}
+              predicates:
+                - Path=/auth/**
+              filters:
+                - StripPrefix=1
 
-        # Route for /api/patients/** to patient-service
-        - id: patient-service-route
-          uri: http://patient-service:4000
-          predicates:
-            - Path=/api/patients/**
-          filters:
-            - StripPrefix=1
-            - JwtValidation
+            - id: patient-service-route
+              uri: ${patient.service.url}
+              predicates:
+                - Path=/api/patients/**
+              filters:
+                - StripPrefix=1
+                - JwtValidation
 
-        # Route for /api/docs/patients to patient-service /v3/api-docs
-        - id: api-docs-patient-route
-          uri: http://patient-service:4000
-          predicates:
-            - Path=/api-docs/patients
-          filters:
-            - RewritePath=/api-docs/patients,/v3/api-docs
+            - id: billing-service-route
+              uri: ${billing.service.url}
+              predicates:
+                - Path=/api/billing-accounts/**
+              filters:
+                - StripPrefix=1
+                - JwtValidation
 
-        - id: api-docs-auth-route
-          uri: http://auth-service:4005
-          predicates:
-            - Path=/api-docs/auth
-          filters:
-            - RewritePath=/api-docs/auth,/v3/api-docs
+            - id: api-docs-patient-route
+              uri: ${patient.service.url}
+              predicates:
+                - Path=/api-docs/patients
+              filters:
+                - RewritePath=/api-docs/patients,/v3/api-docs
+
+            - id: api-docs-auth-route
+              uri: ${auth.service.url}
+              predicates:
+                - Path=/api-docs/auth
+              filters:
+                - RewritePath=/api-docs/auth,/v3/api-docs
