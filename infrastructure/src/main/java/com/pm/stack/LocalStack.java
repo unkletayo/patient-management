@@ -41,6 +41,10 @@ import software.amazon.awscdk.services.secretsmanager.SecretStringGenerator;
 import software.amazon.awscdk.services.route53.CfnHealthCheck;
 
 public class LocalStack extends Stack {
+  // Spring Boot JVM services OOM or crawl at 256 CPU / 512 MiB; 512 / 1024 is the smallest viable Fargate size.
+  private static final int TASK_CPU = 512;
+  private static final int TASK_MEMORY_MIB = 1024;
+
   private final Vpc vpc;
   private final Cluster ecsCluster;
 
@@ -207,8 +211,8 @@ public class LocalStack extends Stack {
 
     FargateTaskDefinition taskDefinition =
         FargateTaskDefinition.Builder.create(this, id + "Task")
-            .cpu(256)
-            .memoryLimitMiB(512)
+            .cpu(TASK_CPU)
+            .memoryLimitMiB(TASK_MEMORY_MIB)
             .build();
 
     ContainerDefinitionOptions.Builder containerOptions =
@@ -269,8 +273,8 @@ public class LocalStack extends Stack {
   private void createApiGatewayService() {
     FargateTaskDefinition taskDefinition =
         FargateTaskDefinition.Builder.create(this, "APIGatewayTaskDefinition")
-            .cpu(256)
-            .memoryLimitMiB(512)
+            .cpu(TASK_CPU)
+            .memoryLimitMiB(TASK_MEMORY_MIB)
             .build();
 
     ContainerDefinitionOptions containerOptions =
