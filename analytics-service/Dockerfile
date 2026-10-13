@@ -18,6 +18,9 @@ COPY --from=builder --chown=app:app /app/target/*.jar ./app.jar
 
 USER app
 
+# JSON logs in containers so key-value log fields stay machine-readable
+ENV LOGGING_STRUCTURED_FORMAT_CONSOLE=logstash
+
 EXPOSE 4002
 
 ENTRYPOINT ["java", "-jar", "app.jar"]
