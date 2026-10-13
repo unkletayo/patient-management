@@ -1,8 +1,7 @@
 package com.pm.analyticsservice.kafka;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.pm.analyticsservice.exception.MalformedPatientEventException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 import patient.events.PatientEvent;
@@ -10,21 +9,26 @@ import patient.events.PatientEvent;
 @Service
 public class KafkaConsumer {
 
-  private static final Logger log = LoggerFactory.getLogger(
-      KafkaConsumer.class);
+  private final PatientEventHandler handler;
 
-  @KafkaListener(topics="patient", groupId = "analytics-service")
+  public KafkaConsumer(PatientEventHandler handler) {
+    this.handler = handler;
+  }
+
+  /**
+   * Parse failures propagate to the container's error handler, which sends the record to the
+   * dead-letter topic.
+   */
+  @KafkaListener(topics = "${analytics.kafka.topic}")
   public void consumeEvent(byte[] event) {
-    try {
-      PatientEvent patientEvent = PatientEvent.parseFrom(event);
-      // ... perform any business related to analytics here
+    handler.handle(parse(event));
+  }
 
-      log.info("Received Patient Event: [PatientId={},PatientName={},PatientEmail={}]",
-            patientEvent.getPatientId(),
-            patientEvent.getName(),
-            patientEvent.getEmail());
+  private PatientEvent parse(byte[] event) {
+    try {
+      return PatientEvent.parseFrom(event);
     } catch (InvalidProtocolBufferException e) {
-      log.error("Error deserializing event {}", e.getMessage());
+      throw new MalformedPatientEventException("Unable to parse PatientEvent payload", e);
     }
   }
 }

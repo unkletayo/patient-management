@@ -1,20 +1,25 @@
-FROM maven:3.9.9-eclipse-temurin-21 AS builder
+FROM maven:3.9-eclipse-temurin-25 AS builder
 
 WORKDIR /app
 
 COPY pom.xml .
-
 RUN mvn dependency:go-offline -B
 
 COPY src ./src
+RUN mvn -B -DskipTests clean package
 
-RUN mvn clean package
+FROM eclipse-temurin:25-jre AS runner
 
-FROM openjdk:21-jdk AS runner
+RUN groupadd --system app && useradd --system --gid app --no-create-home app
 
 WORKDIR /app
 
-COPY --from=builder ./app/target/analytics-service-0.0.1-SNAPSHOT.jar ./app.jar
+COPY --from=builder --chown=app:app /app/target/*.jar ./app.jar
+
+USER app
+
+# JSON logs in containers so key-value log fields stay machine-readable
+ENV LOGGING_STRUCTURED_FORMAT_CONSOLE=logstash
 
 EXPOSE 4002
 
