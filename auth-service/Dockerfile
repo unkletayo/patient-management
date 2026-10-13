@@ -1,20 +1,23 @@
-FROM maven:3.9.9-eclipse-temurin-21 AS builder
+FROM maven:3.9-eclipse-temurin-25 AS builder
 
 WORKDIR /app
 
+# Resolve dependencies first so this layer is cached until the pom changes
 COPY pom.xml .
-
-RUN mvn dependency:go-offline -B
+RUN mvn -B -q dependency:go-offline
 
 COPY src ./src
+RUN mvn -B -q -DskipTests package
 
-RUN mvn clean package
+FROM eclipse-temurin:25-jre AS runner
 
-FROM openjdk:21-jdk AS runner
+RUN groupadd --system app && useradd --system --gid app --no-create-home app
 
 WORKDIR /app
 
-COPY --from=builder ./app/target/auth-service-0.0.1-SNAPSHOT.jar ./app.jar
+COPY --from=builder --chown=app:app /app/target/auth-service-*.jar ./app.jar
+
+USER app
 
 EXPOSE 4005
 
