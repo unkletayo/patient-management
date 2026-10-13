@@ -1,20 +1,22 @@
-FROM maven:3.9.9-eclipse-temurin-21 AS builder
+FROM maven:3.9-eclipse-temurin-25 AS builder
 
 WORKDIR /app
 
 COPY pom.xml .
-
-RUN mvn dependency:go-offline -B
+RUN --mount=type=cache,target=/root/.m2 mvn -B -q dependency:go-offline
 
 COPY src ./src
+RUN --mount=type=cache,target=/root/.m2 mvn -B -DskipTests package
 
-RUN mvn clean package
-
-FROM openjdk:21-jdk AS runner
+FROM eclipse-temurin:25-jre AS runner
 
 WORKDIR /app
 
-COPY --from=builder ./app/target/patient-service-0.0.1-SNAPSHOT.jar ./app.jar
+RUN groupadd --system app && useradd --system --gid app --no-create-home app
+
+COPY --from=builder /app/target/patient-service-*.jar ./app.jar
+
+USER app
 
 EXPOSE 4000
 
