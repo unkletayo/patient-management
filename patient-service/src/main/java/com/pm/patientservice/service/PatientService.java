@@ -36,6 +36,11 @@ public class PatientService {
         PatientMapper::toDTO);
   }
 
+  @Transactional(readOnly = true)
+  public PatientResponseDTO getPatientById(UUID id) {
+    return PatientMapper.toDTO(findOrThrow(id));
+  }
+
   /**
    * Persists the patient, creates the billing account and publishes the event.
    * A billing failure rolls the transaction back so no orphan patient remains.

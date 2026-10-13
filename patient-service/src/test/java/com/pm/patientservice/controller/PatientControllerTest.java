@@ -121,6 +121,37 @@ class PatientControllerTest {
   }
 
   @Test
+  void getByIdReturnsEnvelope() throws Exception {
+    UUID id = UUID.randomUUID();
+    when(patientService.getPatientById(id)).thenReturn(dto(id));
+
+    mockMvc.perform(get("/patients/{id}", id))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.requestSuccessful").value(true))
+        .andExpect(jsonPath("$.responseCode").value("0"))
+        .andExpect(jsonPath("$.responseBody.id").value(id.toString()))
+        .andExpect(jsonPath("$.responseBody.registeredDate").value("2024-01-10"));
+  }
+
+  @Test
+  void getByIdMissingPatientReturns404() throws Exception {
+    when(patientService.getPatientById(any())).thenThrow(
+        new PatientNotFoundException("missing"));
+
+    mockMvc.perform(get("/patients/{id}", UUID.randomUUID()))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.requestSuccessful").value(false))
+        .andExpect(jsonPath("$.responseCode").value("404"));
+  }
+
+  @Test
+  void getByIdBadUuidReturns400() throws Exception {
+    mockMvc.perform(get("/patients/{id}", "not-a-uuid"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.responseCode").value("400"));
+  }
+
+  @Test
   void createReturnsEnvelope() throws Exception {
     UUID id = UUID.randomUUID();
     when(patientService.createPatient(any())).thenReturn(dto(id));

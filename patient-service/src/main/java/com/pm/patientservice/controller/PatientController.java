@@ -66,6 +66,22 @@ public class PatientController {
         ApiResponse.success(patientService.getPatients(pageable)));
   }
 
+  @GetMapping("/{id}")
+  @Operation(summary = "Get a Patient by ID")
+  @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200",
+      description = "Patient found")
+  @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
+      description = "Malformed id",
+      content = @Content(schema = @Schema(implementation = ApiResponse.class)))
+  @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404",
+      description = "Patient not found",
+      content = @Content(schema = @Schema(implementation = ApiResponse.class)))
+  public ResponseEntity<ApiResponse<PatientResponseDTO>> getPatientById(
+      @PathVariable UUID id) {
+    return ResponseEntity.ok(
+        ApiResponse.success(patientService.getPatientById(id)));
+  }
+
   @PostMapping
   @Operation(summary = "Create a new Patient")
   @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200",

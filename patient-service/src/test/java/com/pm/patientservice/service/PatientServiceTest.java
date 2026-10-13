@@ -79,6 +79,27 @@ class PatientServiceTest {
   }
 
   @Test
+  void getPatientByIdMapsPatient() {
+    UUID id = UUID.randomUUID();
+    when(patientRepository.findById(id)).thenReturn(
+        Optional.of(patient(id, "a@b.com")));
+
+    PatientResponseDTO result = service.getPatientById(id);
+
+    assertThat(result.id()).isEqualTo(id.toString());
+    assertThat(result.email()).isEqualTo("a@b.com");
+  }
+
+  @Test
+  void getPatientByIdThrowsWhenMissing() {
+    UUID id = UUID.randomUUID();
+    when(patientRepository.findById(id)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.getPatientById(id)).isInstanceOf(
+        PatientNotFoundException.class);
+  }
+
+  @Test
   void createPatientPersistsThenBillsThenPublishes() {
     UUID id = UUID.randomUUID();
     when(patientRepository.existsByEmail("a@b.com")).thenReturn(false);
