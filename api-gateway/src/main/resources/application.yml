@@ -30,6 +30,10 @@ spring:
           httpclient:
             connect-timeout: 2000
             response-timeout: 30s
+          # Identity headers are set only by JwtValidation; never trust client-sent ones.
+          default-filters:
+            - RemoveRequestHeader=X-User-Email
+            - RemoveRequestHeader=X-User-Role
           routes:
             # /auth/login and /auth/validate are public at the gateway;
             # the auth-service authenticates /validate itself.
