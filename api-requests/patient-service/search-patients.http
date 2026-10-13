@@ -1,0 +1,5 @@
+### Search patients (all filters optional, combine with page, size, sort)
+# name / email: case-insensitive contains
+# registeredFrom / registeredTo: yyyy-MM-dd, inclusive
+GET http://localhost:4004/api/patients?name=john&registeredFrom=2024-01-01&registeredTo=2024-12-31&page=0&size=20&sort=name,asc
+Authorization: Bearer {{token}}

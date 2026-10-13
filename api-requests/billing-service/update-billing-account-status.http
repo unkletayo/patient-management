@@ -1,0 +1,9 @@
+### Change a billing account status (replace the patient id)
+# Allowed: ACTIVE <-> SUSPENDED, ACTIVE -> CLOSED, SUSPENDED -> CLOSED. CLOSED is final (409).
+PATCH http://localhost:4004/api/billing-accounts/123e4567-e89b-12d3-a456-426614174000/status
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "status": "SUSPENDED"
+}
