@@ -6,3 +6,7 @@ auth:
 patient:
   service:
     url: ${PATIENT_SERVICE_URL:http://patient-service:4000}
+
+billing:
+  service:
+    url: ${BILLING_SERVICE_URL:http://billing-service:4001}

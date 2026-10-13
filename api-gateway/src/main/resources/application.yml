@@ -10,6 +10,10 @@ patient:
   service:
     url: ${PATIENT_SERVICE_URL:http://host.docker.internal:4000}
 
+billing:
+  service:
+    url: ${BILLING_SERVICE_URL:http://host.docker.internal:4001}
+
 management:
   endpoints:
     web:
@@ -40,6 +44,14 @@ spring:
               uri: ${patient.service.url}
               predicates:
                 - Path=/api/patients/**
+              filters:
+                - StripPrefix=1
+                - JwtValidation
+
+            - id: billing-service-route
+              uri: ${billing.service.url}
+              predicates:
+                - Path=/api/billing-accounts/**
               filters:
                 - StripPrefix=1
                 - JwtValidation
