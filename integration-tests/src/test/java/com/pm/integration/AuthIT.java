@@ -1,3 +1,5 @@
+package com.pm.integration;
+
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.notNullValue;
 
@@ -6,7 +8,7 @@ import io.restassured.response.Response;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-public class AuthIntegrationTest {
+public class AuthIT {
 
   @BeforeAll
   static void setUp(){
