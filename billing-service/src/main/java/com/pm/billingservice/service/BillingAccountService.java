@@ -3,6 +3,7 @@ package com.pm.billingservice.service;
 import com.pm.billingservice.exception.BillingAccountNotFoundException;
 import com.pm.billingservice.exception.InvalidBillingRequestException;
 import com.pm.billingservice.model.BillingAccount;
+import com.pm.billingservice.model.BillingAccountStatus;
 import com.pm.billingservice.repository.BillingAccountRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,6 +56,22 @@ public class BillingAccountService {
   public BillingAccount getByPatientId(String patientId) {
     return repository.findByPatientId(patientId)
         .orElseThrow(() -> new BillingAccountNotFoundException(patientId));
+  }
+
+  /**
+   * Changes the account status. Requesting the current status is a no-op.
+   */
+  @Transactional
+  public BillingAccount updateStatus(String patientId, BillingAccountStatus status) {
+    BillingAccount account = repository.findByPatientId(patientId)
+        .orElseThrow(() -> new BillingAccountNotFoundException(patientId));
+    BillingAccountStatus previous = account.getStatus();
+    account.changeStatus(status);
+    if (previous != account.getStatus()) {
+      log.info("Billing account {} status changed from {} to {}",
+          account.getId(), previous, account.getStatus());
+    }
+    return account;
   }
 
   private static void requireText(String value, String field) {
