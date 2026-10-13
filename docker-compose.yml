@@ -97,6 +97,8 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       BILLING_SERVICE_ADDRESS: billing-service
       BILLING_SERVICE_GRPC_PORT: "9001"
+      # first call after a cold start is slow on small dev machines
+      BILLING_GRPC_DEADLINE: 15s
     depends_on:
       patient-service-db:
         condition: service_healthy
