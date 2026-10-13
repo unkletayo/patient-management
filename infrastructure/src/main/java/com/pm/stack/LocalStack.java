@@ -26,6 +26,7 @@ import software.amazon.awscdk.services.ecs.FargateService;
 import software.amazon.awscdk.services.ecs.FargateTaskDefinition;
 import software.amazon.awscdk.services.ecs.LogDriver;
 import software.amazon.awscdk.services.ecs.PortMapping;
+import software.amazon.awscdk.services.ecs.Secret;
 import software.amazon.awscdk.services.ecs.Protocol;
 import software.amazon.awscdk.services.ecs.patterns.ApplicationLoadBalancedFargateService;
 import software.amazon.awscdk.services.logs.LogGroup;
@@ -36,6 +37,7 @@ import software.amazon.awscdk.services.rds.DatabaseInstance;
 import software.amazon.awscdk.services.rds.DatabaseInstanceEngine;
 import software.amazon.awscdk.services.rds.PostgresEngineVersion;
 import software.amazon.awscdk.services.rds.PostgresInstanceEngineProps;
+import software.amazon.awscdk.services.secretsmanager.SecretStringGenerator;
 import software.amazon.awscdk.services.route53.CfnHealthCheck;
 
 public class LocalStack extends Stack {
@@ -69,12 +71,15 @@ public class LocalStack extends Stack {
 
     this.ecsCluster = createEcsCluster();
 
+    software.amazon.awscdk.services.secretsmanager.Secret jwtSecret = createJwtSecret();
+
     FargateService authService =
         createFargateService("AuthService",
             "auth-service",
             List.of(4005),
             authServiceDb,
-            Map.of("JWT_SECRET", "Y2hhVEc3aHJnb0hYTzMyZ2ZqVkpiZ1RkZG93YWxrUkM="));
+            null,
+            Map.of("JWT_SECRET", Secret.fromSecretsManager(jwtSecret)));
 
     authService.getNode().addDependency(authDbHealthCheck);
     authService.getNode().addDependency(authServiceDb);
@@ -84,6 +89,7 @@ public class LocalStack extends Stack {
             "billing-service",
             List.of(4001,9001),
             billingServiceDb,
+            null,
             null);
 
     billingService.getNode().addDependency(billingDbHealthCheck);
@@ -93,6 +99,7 @@ public class LocalStack extends Stack {
         createFargateService("AnalyticsService",
             "analytics-service",
             List.of(4002),
+            null,
             null,
             null);
 
@@ -105,13 +112,30 @@ public class LocalStack extends Stack {
         Map.of(
             "BILLING_SERVICE_ADDRESS", "host.docker.internal",
             "BILLING_SERVICE_GRPC_PORT", "9001"
-        ));
+        ),
+        null);
     patientService.getNode().addDependency(patientServiceDb);
     patientService.getNode().addDependency(patientDbHealthCheck);
     patientService.getNode().addDependency(billingService);
     patientService.getNode().addDependency(mskCluster);
 
     createApiGatewayService();
+  }
+
+  /**
+   * Generates the JWT signing key at deploy time so no secret lives in source control.
+   * 64 alphanumeric chars decode to 48 bytes (384 bits) of valid base64, above the 256-bit minimum.
+   */
+  private software.amazon.awscdk.services.secretsmanager.Secret createJwtSecret(){
+    return software.amazon.awscdk.services.secretsmanager.Secret.Builder
+        .create(this, "JwtSecret")
+        .secretName("patient-management/jwt-secret")
+        .generateSecretString(SecretStringGenerator.builder()
+            .excludePunctuation(true)
+            .passwordLength(64)
+            .build())
+        .removalPolicy(RemovalPolicy.DESTROY)
+        .build();
   }
 
   private Vpc createVpc(){
@@ -178,7 +202,8 @@ public class LocalStack extends Stack {
       String imageName,
       List<Integer> ports,
       DatabaseInstance db,
-      Map<String, String> additionalEnvVars) {
+      Map<String, String> additionalEnvVars,
+      Map<String, Secret> secrets) {
 
     FargateTaskDefinition taskDefinition =
         FargateTaskDefinition.Builder.create(this, id + "Task")
@@ -227,6 +252,10 @@ public class LocalStack extends Stack {
     }
 
     containerOptions.environment(envVars);
+
+    if(secrets != null){
+      containerOptions.secrets(secrets);
+    }
     taskDefinition.addContainer(imageName + "Container", containerOptions.build());
 
     return FargateService.Builder.create(this, id)
