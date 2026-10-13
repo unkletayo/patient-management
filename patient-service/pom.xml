@@ -6,7 +6,7 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>3.4.0</version>
+    <version>4.0.8</version>
     <relativePath/> <!-- lookup parent from repository -->
   </parent>
   <groupId>com.pm</groupId>
@@ -28,8 +28,25 @@
     <url/>
   </scm>
   <properties>
-    <java.version>21</java.version>
+    <java.version>25</java.version>
+    <spring-grpc.version>1.0.3</spring-grpc.version>
+    <springdoc.version>3.1.1</springdoc.version>
+    <!-- Used only by protoc plugin artifacts; keep in sync with spring-grpc-dependencies BOM -->
+    <grpc.version>1.77.1</grpc.version>
+    <protobuf.version>4.33.4</protobuf.version>
   </properties>
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.springframework.grpc</groupId>
+        <artifactId>spring-grpc-dependencies</artifactId>
+        <version>${spring-grpc.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
   <dependencies>
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -41,7 +58,11 @@
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-web</artifactId>
+      <artifactId>spring-boot-starter-webmvc</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-kafka</artifactId>
     </dependency>
 
     <dependency>
@@ -56,60 +77,56 @@
       <scope>runtime</scope>
     </dependency>
     <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-test</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
       <groupId>com.h2database</groupId>
       <artifactId>h2</artifactId>
+      <scope>runtime</scope>
     </dependency>
 
     <dependency>
       <groupId>org.springdoc</groupId>
       <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-      <version>2.7.0</version>
+      <version>${springdoc.version}</version>
     </dependency>
 
-    <!--GRPC -->
+    <!-- gRPC (versions managed by the Spring gRPC BOM) -->
     <dependency>
-      <groupId>io.grpc</groupId>
-      <artifactId>grpc-netty-shaded</artifactId>
-      <version>1.69.0</version>
+      <groupId>org.springframework.grpc</groupId>
+      <artifactId>spring-grpc-client-spring-boot-starter</artifactId>
     </dependency>
     <dependency>
       <groupId>io.grpc</groupId>
       <artifactId>grpc-protobuf</artifactId>
-      <version>1.69.0</version>
     </dependency>
     <dependency>
       <groupId>io.grpc</groupId>
       <artifactId>grpc-stub</artifactId>
-      <version>1.69.0</version>
     </dependency>
-    <dependency> <!-- necessary for Java 9+ -->
+    <dependency>
+      <groupId>com.google.protobuf</groupId>
+      <artifactId>protobuf-java</artifactId>
+    </dependency>
+    <dependency> <!-- generated gRPC sources reference javax.annotation.Generated -->
       <groupId>org.apache.tomcat</groupId>
       <artifactId>annotations-api</artifactId>
       <version>6.0.53</version>
       <scope>provided</scope>
     </dependency>
-    <dependency>
-      <groupId>net.devh</groupId>
-      <artifactId>grpc-spring-boot-starter</artifactId>
-      <version>3.1.0.RELEASE</version>
-    </dependency>
-    <dependency>
-      <groupId>com.google.protobuf</groupId>
-      <artifactId>protobuf-java</artifactId>
-      <version>4.29.1</version>
-    </dependency>
 
     <dependency>
-      <groupId>org.springframework.kafka</groupId>
-      <artifactId>spring-kafka</artifactId>
-      <version>3.3.0</version>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
     </dependency>
-
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-webmvc-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa-test</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
 
@@ -135,9 +152,9 @@
         <artifactId>protobuf-maven-plugin</artifactId>
         <version>0.6.1</version>
         <configuration>
-          <protocArtifact>com.google.protobuf:protoc:3.25.5:exe:${os.detected.classifier}</protocArtifact>
+          <protocArtifact>com.google.protobuf:protoc:${protobuf.version}:exe:${os.detected.classifier}</protocArtifact>
           <pluginId>grpc-java</pluginId>
-          <pluginArtifact>io.grpc:protoc-gen-grpc-java:1.68.1:exe:${os.detected.classifier}</pluginArtifact>
+          <pluginArtifact>io.grpc:protoc-gen-grpc-java:${grpc.version}:exe:${os.detected.classifier}</pluginArtifact>
         </configuration>
         <executions>
           <execution>
