@@ -118,10 +118,10 @@ public class LocalStack extends Stack {
         .create(this, id)
         .engine(DatabaseInstanceEngine.postgres(
             PostgresInstanceEngineProps.builder()
-                .version(PostgresEngineVersion.VER_17_2)
+                .version(PostgresEngineVersion.VER_17_6)
                 .build()))
         .vpc(vpc)
-        .instanceType(InstanceType.of(InstanceClass.BURSTABLE2, InstanceSize.MICRO))
+        .instanceType(InstanceType.of(InstanceClass.BURSTABLE3, InstanceSize.MICRO))
         .allocatedStorage(20)
         .credentials(Credentials.fromGeneratedSecret("admin_user"))
         .databaseName(dbName)
