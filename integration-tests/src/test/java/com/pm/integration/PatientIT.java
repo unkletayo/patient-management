@@ -162,6 +162,123 @@ class PatientIT extends BaseIT {
   }
 
   @Nested
+  @DisplayName("GET /api/patients/{id}")
+  class GetById {
+
+    @Test
+    void returnsCreatedPatient() {
+      Map<String, Object> payload = TestData.patient();
+      String id = createPatient(payload);
+
+      assertSuccess(authenticated().get("/api/patients/{id}", id).then())
+          .body("responseBody.id", equalTo(id))
+          .body("responseBody.email", equalTo(payload.get("email")))
+          .body("responseBody.name", equalTo(payload.get("name")));
+    }
+
+    @Test
+    void unknownIdReturns404() {
+      assertError(
+          authenticated().get("/api/patients/{id}", UUID.randomUUID().toString()).then(), 404);
+    }
+
+    @Test
+    void malformedIdReturns400() {
+      assertError(authenticated().get("/api/patients/{id}", "not-a-uuid").then(), 400);
+    }
+
+    @Test
+    void withoutTokenReturns401() {
+      assertError(anonymous().get("/api/patients/{id}", UUID.randomUUID().toString()).then(), 401);
+    }
+  }
+
+  @Nested
+  @DisplayName("GET /api/patients search filters")
+  class Search {
+
+    @Test
+    void filtersByNameCaseInsensitively() {
+      String marker = "Zq" + TestData.uniqueSuffix();
+      Map<String, Object> payload = TestData.patient();
+      payload.put("name", "Needle " + marker);
+      createPatient(payload);
+      createPatient(TestData.patient());
+
+      assertSuccess(
+              authenticated()
+                  .queryParam("name", marker.toUpperCase())
+                  .get("/api/patients")
+                  .then())
+          .body("responseBody.totalElements", equalTo(1))
+          .body("responseBody.content[0].name", equalTo(payload.get("name")));
+    }
+
+    @Test
+    void filtersByEmail() {
+      Map<String, Object> payload = TestData.patient();
+      createPatient(payload);
+
+      assertSuccess(
+              authenticated()
+                  .queryParam("email", payload.get("email"))
+                  .get("/api/patients")
+                  .then())
+          .body("responseBody.totalElements", equalTo(1));
+    }
+
+    @Test
+    void noMatchReturnsEmptyPage() {
+      assertSuccess(
+              authenticated()
+                  .queryParam("name", "no-such-patient-" + TestData.uniqueSuffix())
+                  .get("/api/patients")
+                  .then())
+          .body("responseBody.empty", equalTo(true))
+          .body("responseBody.totalElements", equalTo(0));
+    }
+
+    @Test
+    void percentIsTreatedAsLiteral() {
+      assertSuccess(authenticated().queryParam("name", "%").get("/api/patients").then())
+          .body("responseBody.totalElements", equalTo(0));
+    }
+
+    @Test
+    void filtersByRegisteredDateRange() {
+      Map<String, Object> payload = TestData.patient();
+      payload.put("registeredDate", "2031-03-04");
+      createPatient(payload);
+
+      assertSuccess(
+              authenticated()
+                  .queryParam("registeredFrom", "2031-03-04")
+                  .queryParam("registeredTo", "2031-03-04")
+                  .get("/api/patients")
+                  .then())
+          .body("responseBody.totalElements", equalTo(1));
+    }
+
+    @Test
+    void fromAfterToReturns400() {
+      assertError(
+          authenticated()
+              .queryParam("registeredFrom", "2031-03-05")
+              .queryParam("registeredTo", "2031-03-04")
+              .get("/api/patients")
+              .then(),
+          400);
+    }
+
+    @Test
+    void unparseableDateReturns400() {
+      assertError(
+          authenticated().queryParam("registeredFrom", "yesterday").get("/api/patients").then(),
+          400);
+    }
+  }
+
+  @Nested
   @DisplayName("conflicts")
   class Conflicts {
 
