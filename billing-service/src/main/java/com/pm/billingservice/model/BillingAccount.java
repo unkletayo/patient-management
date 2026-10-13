@@ -1,5 +1,6 @@
 package com.pm.billingservice.model;
 
+import com.pm.billingservice.exception.InvalidStatusTransitionException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -50,6 +51,18 @@ public class BillingAccount {
     if (createdAt == null) {
       createdAt = Instant.now();
     }
+  }
+
+  /**
+   * Moves the account to the target status. Same-status changes are a no-op.
+   *
+   * @throws InvalidStatusTransitionException if the transition is not allowed
+   */
+  public void changeStatus(BillingAccountStatus target) {
+    if (!status.canTransitionTo(target)) {
+      throw new InvalidStatusTransitionException(status, target);
+    }
+    status = target;
   }
 
   public UUID getId() {

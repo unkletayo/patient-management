@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -22,6 +23,12 @@ public class GlobalExceptionHandler {
     return build(HttpStatus.NOT_FOUND, e.getMessage());
   }
 
+  @ExceptionHandler(InvalidStatusTransitionException.class)
+  public ResponseEntity<ApiResponse<Void>> handleInvalidTransition(
+      InvalidStatusTransitionException e) {
+    return build(HttpStatus.CONFLICT, e.getMessage());
+  }
+
   @ExceptionHandler({
       InvalidBillingRequestException.class,
       ConstraintViolationException.class,
@@ -32,6 +39,12 @@ public class GlobalExceptionHandler {
     String message = e instanceof InvalidBillingRequestException ? e.getMessage()
         : "Invalid request parameters";
     return build(HttpStatus.BAD_REQUEST, message);
+  }
+
+  @ExceptionHandler(HttpMessageNotReadableException.class)
+  public ResponseEntity<ApiResponse<Void>> handleUnreadableBody(
+      HttpMessageNotReadableException e) {
+    return build(HttpStatus.BAD_REQUEST, "Invalid request body");
   }
 
   @ExceptionHandler(Exception.class)
