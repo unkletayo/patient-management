@@ -130,6 +130,23 @@ class JwtValidationFilterTest {
   }
 
   @Test
+  void spoofedIdentityHeadersAreStrippedOnPublicAuthRoute() throws InterruptedException {
+    authServer.enqueue(json(200, VALID_ENVELOPE));
+
+    client.post().uri("/auth/login")
+        .header("X-User-Email", "attacker@evil.com")
+        .header("X-User-Role", "SUPERUSER")
+        .exchange()
+        .expectStatus().isOk();
+
+    RecordedRequest forwarded = authServer.takeRequest(2, TimeUnit.SECONDS);
+    assertThat(forwarded).isNotNull();
+    assertThat(forwarded.getUrl().encodedPath()).isEqualTo("/login");
+    assertThat(forwarded.getHeaders().values("X-User-Email")).isEmpty();
+    assertThat(forwarded.getHeaders().values("X-User-Role")).isEmpty();
+  }
+
+  @Test
   void authServiceRejectionReturns401Envelope() {
     authServer.enqueue(json(401, UNAUTHORIZED_ENVELOPE));
 
