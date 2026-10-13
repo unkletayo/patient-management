@@ -1,5 +1,6 @@
 package com.pm.patientservice.service;
 
+import com.pm.patientservice.dto.PageResponse;
 import com.pm.patientservice.dto.PatientRequestDTO;
 import com.pm.patientservice.dto.PatientResponseDTO;
 import com.pm.patientservice.exception.EmailAlreadyExistsException;
@@ -9,10 +10,10 @@ import com.pm.patientservice.kafka.KafkaProducer;
 import com.pm.patientservice.mapper.PatientMapper;
 import com.pm.patientservice.model.Patient;
 import com.pm.patientservice.repository.PatientRepository;
-import java.time.LocalDate;
-import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class PatientService {
@@ -29,21 +30,24 @@ public class PatientService {
     this.kafkaProducer = kafkaProducer;
   }
 
-  public List<PatientResponseDTO> getPatients() {
-    List<Patient> patients = patientRepository.findAll();
-
-    return patients.stream().map(PatientMapper::toDTO).toList();
+  @Transactional(readOnly = true)
+  public PageResponse<PatientResponseDTO> getPatients(Pageable pageable) {
+    return PageResponse.from(patientRepository.findAll(pageable),
+        PatientMapper::toDTO);
   }
 
-  public PatientResponseDTO createPatient(PatientRequestDTO patientRequestDTO) {
-    if (patientRepository.existsByEmail(patientRequestDTO.getEmail())) {
-      throw new EmailAlreadyExistsException(
-          "A patient with this email " + "already exists"
-              + patientRequestDTO.getEmail());
+  /**
+   * Persists the patient, creates the billing account and publishes the event.
+   * A billing failure rolls the transaction back so no orphan patient remains.
+   */
+  @Transactional
+  public PatientResponseDTO createPatient(PatientRequestDTO request) {
+    if (patientRepository.existsByEmail(request.email())) {
+      throw emailExists(request.email());
     }
 
-    Patient newPatient = patientRepository.save(
-        PatientMapper.toModel(patientRequestDTO));
+    Patient newPatient = patientRepository.saveAndFlush(
+        PatientMapper.toModel(request));
 
     billingServiceGrpcClient.createBillingAccount(newPatient.getId().toString(),
         newPatient.getName(), newPatient.getEmail());
@@ -53,29 +57,40 @@ public class PatientService {
     return PatientMapper.toDTO(newPatient);
   }
 
-  public PatientResponseDTO updatePatient(UUID id,
-      PatientRequestDTO patientRequestDTO) {
+  @Transactional
+  public PatientResponseDTO updatePatient(UUID id, PatientRequestDTO request) {
+    Patient patient = findOrThrow(id);
 
-    Patient patient = patientRepository.findById(id).orElseThrow(
-        () -> new PatientNotFoundException("Patient not found with ID: " + id));
-
-    if (patientRepository.existsByEmailAndIdNot(patientRequestDTO.getEmail(),
-        id)) {
-      throw new EmailAlreadyExistsException(
-          "A patient with this email " + "already exists"
-              + patientRequestDTO.getEmail());
+    if (patientRepository.existsByEmailAndIdNot(request.email(), id)) {
+      throw emailExists(request.email());
     }
 
-    patient.setName(patientRequestDTO.getName());
-    patient.setAddress(patientRequestDTO.getAddress());
-    patient.setEmail(patientRequestDTO.getEmail());
-    patient.setDateOfBirth(LocalDate.parse(patientRequestDTO.getDateOfBirth()));
+    patient.setName(request.name());
+    patient.setAddress(request.address());
+    patient.setEmail(request.email());
+    patient.setDateOfBirth(request.dateOfBirth());
 
-    Patient updatedPatient = patientRepository.save(patient);
-    return PatientMapper.toDTO(updatedPatient);
+    return PatientMapper.toDTO(patientRepository.save(patient));
   }
 
+  @Transactional
   public void deletePatient(UUID id) {
+    if (!patientRepository.existsById(id)) {
+      throw notFound(id);
+    }
     patientRepository.deleteById(id);
+  }
+
+  private Patient findOrThrow(UUID id) {
+    return patientRepository.findById(id).orElseThrow(() -> notFound(id));
+  }
+
+  private static PatientNotFoundException notFound(UUID id) {
+    return new PatientNotFoundException("Patient not found with ID: " + id);
+  }
+
+  private static EmailAlreadyExistsException emailExists(String email) {
+    return new EmailAlreadyExistsException(
+        "A patient with this email already exists: " + email);
   }
 }
