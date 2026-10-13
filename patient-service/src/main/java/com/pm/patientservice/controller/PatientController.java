@@ -4,6 +4,7 @@ import com.pm.patientservice.dto.ApiResponse;
 import com.pm.patientservice.dto.PageResponse;
 import com.pm.patientservice.dto.PatientRequestDTO;
 import com.pm.patientservice.dto.PatientResponseDTO;
+import com.pm.patientservice.exception.InvalidDateRangeException;
 import com.pm.patientservice.exception.InvalidSortException;
 import com.pm.patientservice.service.PatientService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -13,11 +14,13 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.data.web.SortDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,6 +29,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -51,19 +55,49 @@ public class PatientController {
   @Operation(summary = "Get Patients",
       description = "Paginated list. Query params: page (0-based), size "
           + "(default 20, max 100) and sort=field,asc|desc where field is one "
-          + "of name, email, dateOfBirth, registeredDate.")
+          + "of name, email, dateOfBirth, registeredDate. Optional filters, "
+          + "combined with AND: name and email (case-insensitive contains), "
+          + "registeredFrom and registeredTo (yyyy-MM-dd, inclusive).")
   @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200",
       description = "Page of patients wrapped in the standard envelope")
   @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
-      description = "Invalid sort field or parameter",
+      description = "Invalid sort field, malformed date, or registeredFrom "
+          + "after registeredTo",
       content = @Content(schema = @Schema(implementation = ApiResponse.class)))
   public ResponseEntity<ApiResponse<PageResponse<PatientResponseDTO>>> getPatients(
+      @Parameter(description = "Case-insensitive substring of the name")
+      @RequestParam(required = false) String name,
+      @Parameter(description = "Case-insensitive substring of the email")
+      @RequestParam(required = false) String email,
+      @Parameter(description = "Earliest registered date, inclusive (yyyy-MM-dd)")
+      @RequestParam(required = false)
+      @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate registeredFrom,
+      @Parameter(description = "Latest registered date, inclusive (yyyy-MM-dd)")
+      @RequestParam(required = false)
+      @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate registeredTo,
       @Parameter(hidden = true)
       @PageableDefault(size = 20)
       @SortDefault(sort = "name") Pageable pageable) {
     validateSort(pageable);
+    validateDateRange(registeredFrom, registeredTo);
+    return ResponseEntity.ok(ApiResponse.success(patientService.getPatients(
+        name, email, registeredFrom, registeredTo, pageable)));
+  }
+
+  @GetMapping("/{id}")
+  @Operation(summary = "Get a Patient by ID")
+  @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200",
+      description = "Patient found")
+  @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
+      description = "Malformed id",
+      content = @Content(schema = @Schema(implementation = ApiResponse.class)))
+  @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404",
+      description = "Patient not found",
+      content = @Content(schema = @Schema(implementation = ApiResponse.class)))
+  public ResponseEntity<ApiResponse<PatientResponseDTO>> getPatientById(
+      @PathVariable UUID id) {
     return ResponseEntity.ok(
-        ApiResponse.success(patientService.getPatients(pageable)));
+        ApiResponse.success(patientService.getPatientById(id)));
   }
 
   @PostMapping
@@ -120,6 +154,13 @@ public class PatientController {
       @PathVariable UUID id) {
     patientService.deletePatient(id);
     return ResponseEntity.ok(ApiResponse.success(null));
+  }
+
+  private static void validateDateRange(LocalDate from, LocalDate to) {
+    if (from != null && to != null && from.isAfter(to)) {
+      throw new InvalidDateRangeException(
+          "registeredFrom must not be after registeredTo");
+    }
   }
 
   private static void validateSort(Pageable pageable) {

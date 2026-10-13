@@ -3,6 +3,7 @@ package com.pm.patientservice.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -31,6 +32,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 @ExtendWith(MockitoExtension.class)
 class PatientServiceTest {
@@ -62,20 +64,47 @@ class PatientServiceTest {
     return p;
   }
 
+  @SuppressWarnings("unchecked")
+  private static Specification<Patient> anySpecification() {
+    return any(Specification.class);
+  }
+
   @Test
   void getPatientsMapsPage() {
     Pageable pageable = PageRequest.of(0, 20);
     UUID id = UUID.randomUUID();
-    when(patientRepository.findAll(pageable)).thenReturn(
+    when(patientRepository.findAll(anySpecification(), eq(pageable))).thenReturn(
         new PageImpl<>(List.of(patient(id, "a@b.com")), pageable, 1));
 
-    PageResponse<PatientResponseDTO> result = service.getPatients(pageable);
+    PageResponse<PatientResponseDTO> result = service.getPatients(null, null,
+        null, null, pageable);
 
     assertThat(result.content()).hasSize(1);
     assertThat(result.content().getFirst().id()).isEqualTo(id.toString());
     assertThat(result.totalElements()).isEqualTo(1);
     assertThat(result.first()).isTrue();
     assertThat(result.last()).isTrue();
+  }
+
+  @Test
+  void getPatientByIdMapsPatient() {
+    UUID id = UUID.randomUUID();
+    when(patientRepository.findById(id)).thenReturn(
+        Optional.of(patient(id, "a@b.com")));
+
+    PatientResponseDTO result = service.getPatientById(id);
+
+    assertThat(result.id()).isEqualTo(id.toString());
+    assertThat(result.email()).isEqualTo("a@b.com");
+  }
+
+  @Test
+  void getPatientByIdThrowsWhenMissing() {
+    UUID id = UUID.randomUUID();
+    when(patientRepository.findById(id)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.getPatientById(id)).isInstanceOf(
+        PatientNotFoundException.class);
   }
 
   @Test
