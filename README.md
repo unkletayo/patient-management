@@ -9,399 +9,114 @@ YouTube channel. You can join the discord for help and discussion here:
 https://discord.gg/nCrDnfCE
 
 
-# Patient Service
 
----
+# Patient Management
 
-## Environment Variables
+Java microservices for managing patients, their billing accounts and an event stream.
+Java 25 (LTS), Spring Boot 4.0.8, Spring Cloud 2025.1.3, Spring gRPC, PostgreSQL 17, Kafka.
 
-```
-JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005;
-SPRING_DATASOURCE_PASSWORD=password;
-SPRING_DATASOURCE_URL=jdbc:postgresql://patient-service-db:5432/db;
-SPRING_DATASOURCE_USERNAME=admin_user;
-SPRING_JPA_HIBERNATE_DDL_AUTO=update;
-SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092;
-SPRING_SQL_INIT_MODE=always
-```
+| Service | Port | Role |
+|---|---|---|
+| `api-gateway` | 4004 | Single public entry point. Routes, validates the JWT, adds `X-User-Email` and `X-User-Role`. |
+| `auth-service` | 4005 | Login and token validation. |
+| `patient-service` | 4000 | Patient CRUD and search. Calls billing over gRPC, publishes Kafka events. |
+| `billing-service` | 4001 REST, 9001 gRPC | Billing accounts. |
+| `analytics-service` | 4002 | Kafka consumer, with a dead-letter topic. |
+| `infrastructure` | | AWS CDK stack (also deployable to LocalStack). |
+| `integration-tests` | | Black-box tests that call the running stack through the gateway. |
 
-# Billing Service
+## Run locally
 
----
+Needs Docker. Each service builds with its own Maven wrapper, so no local Maven or JDK is needed for this.
 
-## gRPC Setup
-
-Add the following to the `<dependencies>` section
-```
-<!--GRPC -->
-<dependency>
-    <groupId>io.grpc</groupId>
-    <artifactId>grpc-netty-shaded</artifactId>
-    <version>1.69.0</version>
-</dependency>
-<dependency>
-    <groupId>io.grpc</groupId>
-    <artifactId>grpc-protobuf</artifactId>
-    <version>1.69.0</version>
-</dependency>
-<dependency>
-    <groupId>io.grpc</groupId>
-    <artifactId>grpc-stub</artifactId>
-    <version>1.69.0</version>
-</dependency>
-<dependency> <!-- necessary for Java 9+ -->
-    <groupId>org.apache.tomcat</groupId>
-    <artifactId>annotations-api</artifactId>
-    <version>6.0.53</version>
-    <scope>provided</scope>
-</dependency>
-<dependency>
-    <groupId>net.devh</groupId>
-    <artifactId>grpc-spring-boot-starter</artifactId>
-    <version>3.1.0.RELEASE</version>
-</dependency>
-<dependency>
-    <groupId>com.google.protobuf</groupId>
-    <artifactId>protobuf-java</artifactId>
-    <version>4.29.1</version>
-</dependency>
-
-```
-
-Replace the `<build>` section with the following
-
-```
-
-<build>
-    <extensions>
-        <!-- Ensure OS compatibility for protoc -->
-        <extension>
-            <groupId>kr.motd.maven</groupId>
-            <artifactId>os-maven-plugin</artifactId>
-            <version>1.7.0</version>
-        </extension>
-    </extensions>
-    <plugins>
-        <!-- Spring boot / maven  -->
-        <plugin>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-maven-plugin</artifactId>
-        </plugin>
-
-        <!-- PROTO -->
-        <plugin>
-            <groupId>org.xolstice.maven.plugins</groupId>
-            <artifactId>protobuf-maven-plugin</artifactId>
-            <version>0.6.1</version>
-            <configuration>
-                <protocArtifact>com.google.protobuf:protoc:3.25.5:exe:${os.detected.classifier}</protocArtifact>
-                <pluginId>grpc-java</pluginId>
-                <pluginArtifact>io.grpc:protoc-gen-grpc-java:1.68.1:exe:${os.detected.classifier}</pluginArtifact>
-            </configuration>
-            <executions>
-                <execution>
-                    <goals>
-                        <goal>compile</goal>
-                        <goal>compile-custom</goal>
-                    </goals>
-                </execution>
-            </executions>
-        </plugin>
-    </plugins>
-</build>
-
-```
-
-# Patient Service
-
----
-
-## Environment Variables (complete list)
 ```bash
-BILLING_SERVICE_ADDRESS=billing-service;
-BILLING_SERVICE_GRPC_PORT=9005;
-JAVA_TOOL_OPTIONS=-agentlib:jdwp\=transport\=dt_socket,server\=y,suspend\=n,address\=*:5005;
-SPRING_DATASOURCE_PASSWORD=password;
-SPRING_DATASOURCE_URL=jdbc:postgresql://patient-service-db:5432/db;
-SPRING_DATASOURCE_USERNAME=admin_user;
-SPRING_JPA_HIBERNATE_DDL_AUTO=update;
-SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092;
-SPRING_SQL_INIT_MODE=always
+cp .env.example .env            # then set JWT_SECRET, e.g. openssl rand -base64 48
+export JWT_SECRET=$(openssl rand -base64 48)
+docker compose up --build -d
 ```
 
+The gateway is then on http://localhost:4004. Cold JVMs are slow on small machines; the first
+create-patient call can time out until billing and Kafka have warmed up.
 
-## gRPC Setup
+Seed user: `testuser@test.com` / `password123`.
 
-Add the following to the `<dependencies>` section
-```
-<!--GRPC -->
-<dependency>
-    <groupId>io.grpc</groupId>
-    <artifactId>grpc-netty-shaded</artifactId>
-    <version>1.69.0</version>
-</dependency>
-<dependency>
-    <groupId>io.grpc</groupId>
-    <artifactId>grpc-protobuf</artifactId>
-    <version>1.69.0</version>
-</dependency>
-<dependency>
-    <groupId>io.grpc</groupId>
-    <artifactId>grpc-stub</artifactId>
-    <version>1.69.0</version>
-</dependency>
-<dependency> <!-- necessary for Java 9+ -->
-    <groupId>org.apache.tomcat</groupId>
-    <artifactId>annotations-api</artifactId>
-    <version>6.0.53</version>
-    <scope>provided</scope>
-</dependency>
-<dependency>
-    <groupId>net.devh</groupId>
-    <artifactId>grpc-spring-boot-starter</artifactId>
-    <version>3.1.0.RELEASE</version>
-</dependency>
-<dependency>
-    <groupId>com.google.protobuf</groupId>
-    <artifactId>protobuf-java</artifactId>
-    <version>4.29.1</version>
-</dependency>
-
+```bash
+TOKEN=$(curl -s localhost:4004/auth/login -H 'Content-Type: application/json' \
+  -d '{"email":"testuser@test.com","password":"password123"}' | jq -r .responseBody.token)
+curl -s localhost:4004/api/patients -H "Authorization: Bearer $TOKEN"
 ```
 
-Replace the `<build>` section with the following
+Ready-made requests are in `api-requests/` (set `{{token}}` by running login first).
 
+## API
+
+Every response uses one envelope:
+
+```json
+{ "requestSuccessful": true, "responseMessage": "success", "responseCode": "0", "responseBody": {} }
 ```
 
-<build>
-    <extensions>
-        <!-- Ensure OS compatibility for protoc -->
-        <extension>
-            <groupId>kr.motd.maven</groupId>
-            <artifactId>os-maven-plugin</artifactId>
-            <version>1.7.0</version>
-        </extension>
-    </extensions>
-    <plugins>
-        <!-- Spring boot / maven  -->
-        <plugin>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-maven-plugin</artifactId>
-        </plugin>
+Errors set `requestSuccessful` to `false` and `responseCode` to the HTTP status as a string.
+Validation errors (400) return a field to message map in `responseBody`.
 
-        <!-- PROTO -->
-        <plugin>
-            <groupId>org.xolstice.maven.plugins</groupId>
-            <artifactId>protobuf-maven-plugin</artifactId>
-            <version>0.6.1</version>
-            <configuration>
-                <protocArtifact>com.google.protobuf:protoc:3.25.5:exe:${os.detected.classifier}</protocArtifact>
-                <pluginId>grpc-java</pluginId>
-                <pluginArtifact>io.grpc:protoc-gen-grpc-java:1.68.1:exe:${os.detected.classifier}</pluginArtifact>
-            </configuration>
-            <executions>
-                <execution>
-                    <goals>
-                        <goal>compile</goal>
-                        <goal>compile-custom</goal>
-                    </goals>
-                </execution>
-            </executions>
-        </plugin>
-    </plugins>
-</build>
+Lists are paginated: `page` (0-based, default 0), `size` (default 20, max 100) and `sort=field,asc|desc`
+(allow-listed fields only, otherwise 400). `responseBody` is:
 
+```json
+{ "content": [], "pageNumber": 0, "pageSize": 20, "totalElements": 0,
+  "totalPages": 0, "first": true, "last": true, "empty": true }
 ```
 
-## Kafka Container
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/auth/login` | Public. Returns a JWT. |
+| GET | `/auth/validate` | Public route; the auth service checks the bearer token itself. |
+| GET | `/api/patients` | Paginated. Filters: `name`, `email` (case-insensitive contains), `registeredFrom`, `registeredTo` (`yyyy-MM-dd`, inclusive). |
+| GET | `/api/patients/{id}` | 404 if unknown. |
+| POST | `/api/patients` | `registeredDate` optional (defaults to today). 409 on duplicate email. Creates the billing account. |
+| PUT | `/api/patients/{id}` | 404 unknown, 409 duplicate email. |
+| DELETE | `/api/patients/{id}` | 404 if unknown. |
+| GET | `/api/billing-accounts` | Paginated. |
+| GET | `/api/billing-accounts/{patientId}` | 404 if unknown. |
+| PATCH | `/api/billing-accounts/{patientId}/status` | `{"status":"SUSPENDED"}`. ACTIVE to SUSPENDED or CLOSED, SUSPENDED to ACTIVE or CLOSED. CLOSED is final (409). |
 
-Copy/paste this line into the environment variables when running the container in intellij
-```
-KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094;KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER;KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093;KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT;KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094;KAFKA_CFG_NODE_ID=0;KAFKA_CFG_PROCESS_ROLES=controller,broker
-```
+OpenAPI JSON is served through the gateway at `/api-docs/patients` and `/api-docs/auth`.
 
-## Kafka Producer Setup (Patient Service)
+## Configuration
 
-Add the following to `application.properties`
-```
-spring.kafka.consumer.key-deserializer=org.apache.kafka.common.serialization.StringDeserializer
-spring.kafka.consumer.value-deserializer=org.apache.kafka.common.serialization.ByteArrayDeserializer
-```
+| Variable | Service | Purpose |
+|---|---|---|
+| `JWT_SECRET` | auth | Required. Base64 signing key, at least 32 bytes. |
+| `SPRING_DATASOURCE_URL`, `_USERNAME`, `_PASSWORD` | auth, patient, billing | Postgres. Falls back to in-memory H2 when unset. |
+| `SPRING_JPA_HIBERNATE_DDL_AUTO` | auth, patient, billing | Default `update`. |
+| `SPRING_SQL_INIT_MODE` | auth, patient, billing | `always` runs `schema.sql` and `data.sql` (seed data). |
+| `SPRING_KAFKA_BOOTSTRAP_SERVERS` | patient, analytics | Kafka brokers. |
+| `BILLING_SERVICE_ADDRESS`, `BILLING_SERVICE_GRPC_PORT` | patient | Billing gRPC target. |
+| `BILLING_GRPC_DEADLINE` | patient | gRPC deadline. Compose sets `15s` for cold starts. |
+| `AUTH_SERVICE_URL`, `PATIENT_SERVICE_URL`, `BILLING_SERVICE_URL` | gateway | Upstream URLs. |
 
+## Build and test
 
-# Notification Service
-
----
-
-## Environment Vars
-
-```
-SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-```
-
-## Protobuf/Kafka 
-
-Dependencies (add in addition to whats there)
-
-```
-<dependency>
-    <groupId>org.springframework.kafka</groupId>
-    <artifactId>spring-kafka</artifactId>
-    <version>3.3.0</version>
-</dependency>
-
-<dependency>
-    <groupId>com.google.protobuf</groupId>
-    <artifactId>protobuf-java</artifactId>
-    <version>4.29.1</version>
-</dependency>
+```bash
+cd <service> && ./mvnw verify     # unit and slice tests (needs JAVA_HOME on a JDK 25)
 ```
 
-Update the build section in pom.xml with the following
+Integration tests need the compose stack running, otherwise they skip:
 
-```
-    <build>
-        <extensions>
-            <!-- Ensure OS compatibility for protoc -->
-            <extension>
-                <groupId>kr.motd.maven</groupId>
-                <artifactId>os-maven-plugin</artifactId>
-                <version>1.7.0</version>
-            </extension>
-        </extensions>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-
-            <plugin>
-                <groupId>org.xolstice.maven.plugins</groupId>
-                <artifactId>protobuf-maven-plugin</artifactId>
-                <version>0.6.1</version>
-                <configuration>
-                    <protocArtifact>com.google.protobuf:protoc:3.25.5:exe:${os.detected.classifier}</protocArtifact>
-                    <pluginId>grpc-java</pluginId>
-                    <pluginArtifact>io.grpc:protoc-gen-grpc-java:1.68.1:exe:${os.detected.classifier}</pluginArtifact>
-                </configuration>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>compile</goal>
-                            <goal>compile-custom</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-        </plugins>
-    </build>
+```bash
+cd integration-tests && ./mvnw verify        # or: ./mvnw -Pit verify from the repo root
+# other gateway: -Dgateway.url=https://host or GATEWAY_URL
 ```
 
+## Deploy
 
-# Auth service
+- **Docker host:** `docker compose up --build -d` on any VM with Docker, behind a reverse proxy on port 4004.
+- **AWS:** `infrastructure/` is a CDK app (Fargate, RDS, MSK). `cdk bootstrap` once, then `cdk deploy`.
+  It also runs on LocalStack for local experiments. It has not been deployed end to end yet.
 
-Dependencies (add in addition to whats there)
+## Known limitations
 
-```
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-security</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-jpa</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.security</groupId>
-            <artifactId>spring-security-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-api</artifactId>
-            <version>0.12.6</version>
-        </dependency>
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-impl</artifactId>
-            <version>0.12.6</version>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-jackson</artifactId>
-            <version>0.12.6</version>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.postgresql</groupId>
-            <artifactId>postgresql</artifactId>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.springdoc</groupId>
-            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>2.6.0</version>
-        </dependency>
-        <dependency>
-          <groupId>com.h2database</groupId>
-          <artifactId>h2</artifactId>
-        </dependency>
-       
-```
-
-## Environment Variables
-
-```
-SPRING_DATASOURCE_PASSWORD=password
-SPRING_DATASOURCE_URL=jdbc:postgresql://auth-service-db:5432/db
-SPRING_DATASOURCE_USERNAME=admin_user
-SPRING_JPA_HIBERNATE_DDL_AUTO=update
-SPRING_SQL_INIT_MODE=always
-```
-
-
-## Data.sql
-
-```sql
--- Ensure the 'users' table exists
-CREATE TABLE IF NOT EXISTS "users" (
-    id UUID PRIMARY KEY,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password VARCHAR(255) NOT NULL,
-    role VARCHAR(50) NOT NULL
-);
-
--- Insert the user if no existing user with the same id or email exists
-INSERT INTO "users" (id, email, password, role)
-SELECT '223e4567-e89b-12d3-a456-426614174006', 'testuser@test.com',
-       '$2b$12$7hoRZfJrRKD2nIm2vHLs7OBETy.LWenXXMLKf99W8M4PUwO6KB7fu', 'ADMIN'
-WHERE NOT EXISTS (
-    SELECT 1
-    FROM "users"
-    WHERE id = '223e4567-e89b-12d3-a456-426614174006'
-       OR email = 'testuser@test.com'
-);
-
-
-
-```
-
-
-# Auth Service DB
-
-## Environment Variables
-
-```
-POSTGRES_DB=db;POSTGRES_PASSWORD=password;POSTGRES_USER=admin_user
-```
+- Creating a patient calls billing synchronously. If the patient transaction fails after billing
+  succeeds, an orphan billing account remains. There is no compensation or outbox yet.
+- The `patient.DLT` topic relies on broker auto-creation; the CDK stack does not provision it.
+- Roles are forwarded by the gateway but not enforced by any service.
