@@ -355,8 +355,7 @@ class PatientIT extends BaseIT {
           "name",
           "email",
           "address",
-          "dateOfBirth",
-          "registeredDate");
+          "dateOfBirth");
     }
 
     @Test
@@ -374,11 +373,14 @@ class PatientIT extends BaseIT {
     }
 
     @Test
-    void createWithoutRegisteredDateReturns400() {
+    void createWithoutRegisteredDateDefaultsToToday() {
       Map<String, Object> payload = TestData.patient();
       payload.remove("registeredDate");
-      assertValidationError(
-          authenticated().body(payload).post("/api/patients").then(), "registeredDate");
+      ValidatableResponse response =
+          assertSuccess(authenticated().body(payload).post("/api/patients").then());
+      CREATED_IDS.add(response.extract().jsonPath().getString("responseBody.id"));
+
+      response.body("responseBody.registeredDate", equalTo(java.time.LocalDate.now().toString()));
     }
 
     @Test
